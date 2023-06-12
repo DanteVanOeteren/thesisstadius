@@ -19,6 +19,7 @@ track_distance = 0
 current_speed = 0
 debug_messages = []
 
+
 #template = render_template('index.html', speed=speed, forward_message=forward_message, track_distance=track_distance, current_speed=current_speed)
 
 
@@ -63,14 +64,16 @@ def calibrate_motor():
         odrv.axis0.config.motor.current_hard_max = 90
         odrv.axis0.config.motor.calibration_current = 10
         odrv.axis0.config.motor.resistance_calib_max_voltage = 2
+        odrv.axis0.config.calibration_lockin.current = 10
+        odrv.axis0.controller.config.control_mode = ControlMode.POSITION_CONTROL
+        odrv.axis0.controller.config.input_mode = InputMode.TRAP_TRAJ
+        odrv.axis0.trap_traj.config.vel_limit = 2
+        odrv.axis0.trap_traj.config.accel_limit = 5
+        odrv.axis0.trap_traj.config.decel_limit = 5
+        odrv.axis0.controller.config.vel_limit = 10
+        odrv.axis0.controller.config.vel_limit_tolerance = 1
         odrv.axis0.config.torque_soft_min = -0.7718666666666667
         odrv.axis0.config.torque_soft_max = 0.7718666666666667
-        odrv.axis0.config.calibration_lockin.current = 10
-        odrv.axis0.controller.config.control_mode = ControlMode.VELOCITY_CONTROL
-        odrv.axis0.controller.config.input_mode = InputMode.VEL_RAMP
-        odrv.axis0.controller.config.vel_ramp_rate = 1
-        odrv.axis0.controller.config.vel_limit = 20
-        odrv.axis0.controller.config.vel_limit_tolerance = 5
         odrv.inc_encoder0.config.cpr = 8192
         odrv.inc_encoder0.config.enabled = True
         odrv.config.gpio7_mode = GpioMode.DIGITAL
@@ -111,7 +114,7 @@ def start_motor():
         #insert motor code
         print("Start pressed", file=sys.stderr)
         odrv.axis0.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL  
-        rps = (speed/(2*math.pi*radius))*(40/13)
+        rps = (speed/(2*math.pi*radius))*(32/14)
         odrv.axis0.controller.input_vel = rps
         forward_message = "Motor is running at a speed of %s m/s" % (speed)
         update_debug_window(forward_message)
@@ -164,13 +167,116 @@ def record_track():
     try:
         #Insert encoder code
         track_distance = 10
-        forward_message = "Track distance equals to %s m" % (track_distance)
+        forward_message = "Track distance equals to %s rotations" % (track_distance)
         update_debug_window(forward_message)
     except:
         print("No ODrive connected.", file=sys.stderr)
         forward_message = "No ODrive connected.blabla"
         update_debug_window(forward_message)
     return render_template('index.html', speed=speed, forward_message=forward_message, track_distance=track_distance, current_speed=current_speed) 
+
+
+@app.route("/trackStart/", methods=['POST'])
+def start_track():
+    try:
+        global track_start 
+        track_start = odrv.axis0.pos_vel_mapper.pos_rel
+        forward_message = "Start of track set at %s" % (track_start)
+        update_debug_window(forward_message)
+    except:
+        print("No ODrive connected.", file=sys.stderr)
+        forward_message = "No ODrive connected.blabla"
+        update_debug_window(forward_message)
+    return render_template('index.html', speed=speed, forward_message=forward_message, track_distance=track_distance, current_speed=current_speed) 
+        
+@app.route("/trackEnd/", methods=['POST'])
+def end_track():
+    global track_end
+    track_end = odrv.axis0.pos_vel_mapper.pos_rel
+    track_distance = track_end - track_start
+    forward_message = "End of track set at %s" % (track_end)
+    update_debug_window(forward_message)
+    print("Track distance: " + str(track_distance) + "   Track Start" + str(track_start) + "   Track End"  + str(track_end), file=sys.stderr)
+    """    
+    except:
+        print("No ODrive connected.", file=sys.stderr)
+        forward_message = "No ODrive connected.blabla"
+        update_debug_window(forward_message)
+    """
+    return render_template('index.html', speed=speed, forward_message=forward_message, track_distance=track_distance, current_speed=current_speed) 
+
+@app.route("/goToStart/", methods=['POST'])
+def go_to_start():
+    try:
+        pos = track_start
+        
+        start_pos = odrv.axis0.pos_vel_mapper.pos_rel
+        
+        forward_message = "Moving to Start"
+        update_debug_window(forward_message)
+        
+        odrv.axis0.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+        if (odrv.axis0.active_errors == 0):
+            odrv.axis0.controller.input_pos = pos
+            while(abs(odrv.axis0.pos_vel_mapper.pos_rel-pos) > 0.1):
+                current_speed = odrv.axis0.pos_vel_mapper.vel
+                if (abs(start_pos - odrv.axis0.pos_vel_mapper.pos_rel) > 4):
+                    odrv.axis0.trap_traj.config.vel_limit = 10
+                time.sleep(0.1)
+                render_template('index.html', speed=speed, forward_message=forward_message, track_distance=track_distance, current_speed=current_speed) 
+            odrv.axis0.trap_traj.config.vel_limit = 2
+            
+        forward_message = "Arrived at Start"
+        update_debug_window(forward_message)
+    except NameError:
+        #track_start is not defined
+        forward_message = "Start not yet defined"
+        update_debug_window(forward_message)
+    except:
+        print("No ODrive connected.", file=sys.stderr)
+        forward_message = "No ODrive connected.blabla"
+        update_debug_window(forward_message)
+    return render_template('index.html', speed=speed, forward_message=forward_message, track_distance=track_distance, current_speed=current_speed) 
+
+
+@app.route("/goToEnd/", methods=['POST'])
+def go_to_end():
+    try:
+        pos = track_end
+        
+        forward_message = "Moving to End"
+        update_debug_window(forward_message)
+        
+        odrv.axis0.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+        if (odrv.axis0.active_errors == 0):
+            odrv.axis0.controller.input_pos = pos
+            while(abs(odrv.axis0.pos_vel_mapper.pos_rel-pos) > 0.1):
+                current_speed = odrv.axis0.pos_vel_mapper.vel
+                time.sleep(0.1)            
+                
+        forward_message = "Arrived at Start"
+        update_debug_window(forward_message)
+    except NameError:
+        
+        #track_end is not defined
+        forward_message = "End not yet defined"
+        update_debug_window(forward_message)
+    except:
+        print("No ODrive connected.", file=sys.stderr)
+        forward_message = "No ODrive connected.blabla"
+        update_debug_window(forward_message)
+    return render_template('index.html', speed=speed, forward_message=forward_message, track_distance=track_distance, current_speed=current_speed) 
+            
+
+@app.route("/update")
+def random_number():
+    try:
+        print("Curr speed" + str(odrv.axis0.pos_vel_mapper.vel), file=sys.stderr)
+        return str(odrv.axis0.pos_vel_mapper.vel)
+    except: 
+        return str(0)
+    return str(0)
+
 
 @app.route('/debug_messages/')
 def get_debug_messages():

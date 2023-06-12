@@ -19,6 +19,12 @@
 				<form action="/calibrate/" method="POST">
 					<button class="button calibrateBtn" name="calibrateBtn" type="submit">Calibrate</button>
 				</form>
+				<form action="/goToStart/" method="POST">
+					<button class="button goToStartBtn" name="goToStartBtn" type="submit">Go to Start</button>
+				</form><br>
+				<form action="/goToEnd/" method="POST">
+					<button class="button goToEndBtn" name="goToEndBtn" type="submit">Go to End</button>
+				</form><br>
 			</div><br>
 			<div id="startStopDiv">
 				<form action="/start/" method="post" id="startForm">
@@ -47,15 +53,18 @@
 
 		<div id="trackBuilder">
 			<!--Trackbuilder-->
-			<div id="trackRecorder">
-				<form action="/recordTrack/" method="POST">
-					<button class="button recordTrackBtn" name="recordTrackBtn" type="submit">Record track</button>
+			<div id="trackStart">
+				<form action="/trackStart/" method="POST">
+					<button class="button trackStart" name="startTrackBtn" type="submit">Press at start of track</button>
+				</form><br>
+			</div>
+			<div id="trackEnd">
+				<form action="/trackEnd/" method="POST">
+					<button class="button trackEnd" name="endTrackBtn" type="submit">Press at end of track</button>
 				</form><br>
 			</div>
 			<div id="trackValues">
-				<h4><u>Current values</u></h4>
-				Track distance = {{ track_distance}} m <br>
-				Current speed = {{ current_speed }} m/s <br>
+				<h4 id="flikkertest" class="flikkertest2">Current Speed: 0 rotations/s</h4>
 			</div>
 			<div id="trackConditions">
 				<h4>Conditions</h4>
@@ -81,6 +90,24 @@
 
 		<div id="debugWindow"></div>
 	</div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+    <script>
+    var elem = document.getElementById("trackValues");
+    setInterval(function(){
+        $.ajax({
+          url: "/update",
+          type: "get",
+          success: function(response) {
+            $(".flikkertest2").html("Current speed: " + response + " rotations/s");
+           },
+          error: function(xhr) {
+              //Handel error
+          }
+        }); 
+    }, 100);
+    </script>
+
 
 	<script>
 		document.getElementById("startForm").style.display = "none";
