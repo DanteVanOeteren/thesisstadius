@@ -68,13 +68,13 @@ def calibrate_motor():
         odrv.axis0.controller.config.control_mode = ControlMode.POSITION_CONTROL
         odrv.axis0.controller.config.input_mode = InputMode.TRAP_TRAJ
         odrv.axis0.trap_traj.config.vel_limit = 2
-        odrv.axis0.trap_traj.config.accel_limit = 5
-        odrv.axis0.trap_traj.config.decel_limit = 5
-        odrv.axis0.controller.config.vel_limit = 10
+        odrv.axis0.trap_traj.config.accel_limit = 10
+        odrv.axis0.trap_traj.config.decel_limit = 10
+        odrv.axis0.controller.config.vel_limit = 20
         odrv.axis0.controller.config.vel_limit_tolerance = 1
         odrv.axis0.config.torque_soft_min = -0.7718666666666667
         odrv.axis0.config.torque_soft_max = 0.7718666666666667
-        odrv.inc_encoder0.config.cpr = 8192
+        odrv.inc_encoder0.config.cpr = 20480
         odrv.inc_encoder0.config.enabled = True
         odrv.config.gpio7_mode = GpioMode.DIGITAL
         odrv.axis0.commutation_mapper.config.use_index_gpio = True
