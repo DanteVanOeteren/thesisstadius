@@ -4,6 +4,10 @@ import logging
 
 import odrive
 from odrive.enums import *
+from ruckig import InputParameter, OutputParameter, Result, Ruckig
+import matplotlib.pyplot as plt 
+from copy import copy
+
 
 class ODriveFailure(Exception):
     pass
@@ -118,13 +122,15 @@ class ODriveInterfaceAPI(object):
         time.sleep(1)
         while self.axis.current_state != AXIS_STATE_IDLE:
             time.sleep(0.1)
+            
         if self.axis.active_errors != 0:
             print("Error handling")
-            print("Active_errors: ", self.axis.active_errors)
-            print("Disarm reason: ", self.axis.disarm_reason)
+            print("Active errors: ", self.axis.active_errors-1, ODriveError(self.axis.active_errors-1))
+            print("Disarm reason: ", self.axis.disarm_reason, ODriveError(self.axis.disarm_reason))
             return False
         
         if self.axis.procedure_result == PROCEDURE_RESULT_NOT_CALIBRATED:
+            print("Unsuccesful calbration, check config")
             return False
         
         self.calibrated = True
@@ -135,6 +141,7 @@ class ODriveInterfaceAPI(object):
         if self.driver and hasattr(self, 'axis'):
             return self.axis.current_state == AXIS_STATE_CLOSED_LOOP_CONTROL
         else:
+            print("Odrive not connected")
             return False
     
     
@@ -142,11 +149,13 @@ class ODriveInterfaceAPI(object):
         if self.driver and hasattr(self, 'axis'):
             return self.axis.current_state == AXIS_STATE_IDLE
         else:
+            print("Odrive not connected")
             return False
         
         
     def engage(self):
         if not self.driver:
+            print("Odrive not connected")
             return False
     
         #self.logger.debug("Setting drive mode.")
@@ -158,6 +167,7 @@ class ODriveInterfaceAPI(object):
     
     def release(self):
         if not self.driver:
+            print("Odrive not connected")
             return False
         
         #self.logger.debug("Releasing.")
@@ -169,6 +179,7 @@ class ODriveInterfaceAPI(object):
     
     def set_traj_start(self):
         if not self.driver:
+            print("Odrive not connected")
             return False
         
         
@@ -178,6 +189,7 @@ class ODriveInterfaceAPI(object):
     
     def set_traj_end(self):
         if not self.driver:
+            print("Odrive not connected")
             return False
         
         self.traj_end = self.axis.pos_vel_mapper.pos_rel
@@ -185,35 +197,33 @@ class ODriveInterfaceAPI(object):
     
     
     def go_to_start(self):
-        if self.go_to(target_pos = self.traj_start):
-            return True
-        else:
-            return False
+        return self.go_to(target_pos = self.traj_start)
+
          
-            
     def go_to_end(self):
-        if self.go_to(target_pos = self.traj_end):
-            return True
-        else:
-            return False
+        return self.go_to(target_pos = self.traj_end)
        
     
     def go_to(self, target_pos, speed = None, accel = None):
         if not self.driver:
+            print("Odrive not connected")
             return False
          
         if not self.engaged():
+            print("Odrive not engaged")
             return False
          
         if not (self.traj_end):
+            print("End of trajectory not yet set")
             return False
         
         if not (self.traj_start):
+            print("Start of trajectory not yet set)
             return False
         
-        if not ( ((self.traj_start <= target_pos) & (target_pos <= self.traj_end)) | ((self.traj_start >= target_pos) & (target_pos >= self.traj_end)) ):         
+        if not ( ((self.traj_start <= target_pos) & (target_pos <= self.traj_end)) | ((self.traj_start >= target_pos) & (target_pos >= self.traj_end)) ):  
+            print("Entered target position is outside of trajectory")
             return False
-        
         
         if not speed:
             speed = self.speed
@@ -222,27 +232,98 @@ class ODriveInterfaceAPI(object):
             accel = self.accel
         
         if speed < self.speed_limit:
+            print("Entered speed higher than speed limit of ", speed_limit, " rotations/s")
             self.axis.trap_traj.config.vel_limit = speed
          
         if accel < self.accel_limit:
+            print("Entered acceleration higher than speed limit of ", speed_limit, " rotations/s^2")
             self.axis.trap_traj.config.accel_limit = accel
             self.axis.trap_traj.config.decel_limit = accel
             
         self.axis.controller.input_pos = target_pos
-        while(abs(self.axis.pos_vel_mapper.pos_rel-target_pos) > 0.2):
+        
+        times = []
+        positions = []
+        speeds = []
+        
+        start_pos = self.axis.pos_vel_mapper.pos_rel
+        start_time = time.time()
+        while(abs(self.axis.pos_vel_mapper.pos_rel-target_pos) > 0.1):
+            current_time = time.time()
+            current_position = self.axis.pos_vel_mapper.pos_rel
             current_speed = self.axis.pos_vel_mapper.vel
-            time.sleep(0.1)            
-         
-        return True
+            
+            times.append(current_time - start_time)
+            positions.append(current_position - start_pos)
+            speeds.append(current_speed)
+            time.sleep(0.001)            
+        
+        # Calculate theoretical trajectory and plot it with measurements
+        positions_th, speeds_th, accelerations_th, times_th = self.calculate_theoretical_traj(speed, accel, target_pos - start_pos)
+        plt.plot(times, speeds, label = "Measurements")
+        plt.plot(times_th, speeds_th, "--", label = "Theoretical")
+        plt.title("Trajectory Position")
+        plt.ylabel("Rotations/s")
+        plt.xlabel("Time (s)")
+        plt.legend(loc="upper left")
+        plt.show()
+        
+        return True      
+        
+    def calculate_theoretical_traj(self, speed, accel, target_pos):
+        otg = Ruckig(1, 0.01)  # DoFs, control cycle
+        inp = InputParameter(1)
+        out = OutputParameter(1)
+     
+        # Set input parameters
+        inp.current_position = [0]
+        inp.current_velocity = [0.0]
+        inp.current_acceleration = [0.0]
+     
+        inp.target_position = [target_pos]
+        inp.target_velocity = [0.0]
+        inp.target_acceleration = [0.0]
+     
+        inp.max_velocity = [speed]
+        inp.max_acceleration = [accel]
+        inp.max_jerk = [100000]
+      
+        # Generate the trajectory within the control loop
+        first_output, out_list = None, []
+        positions, speeds, accelerations, times = [], [], [], []
+        res = Result.Working
+        while res == Result.Working:
+            res = otg.update(inp, out)
+     
+            out_list.append(copy(out))
+            times.append(out.time)
+            positions.append(out.new_position)
+            speeds.append(out.new_velocity)
+            accelerations.append(out.new_acceleration)
+            out.pass_to_input(inp)
+     
+            if not first_output:
+                first_output = copy(out)
+            
+        return positions, speeds, accelerations, times
     
     def get_pos(self):
         if not self.driver:
+            print("Odrive not connected")
             return False
         
         return self.axis.pos_vel_mapper.pos_rel
     
+    def get_speed(self):
+        if not self.driver:
+            print("Odrive not connected")
+            return False
+        
+        return self.axis.pos_vel_mapper.vel
+    
     def set_speed(self, speed):
         if not self.driver:
+            print("Odrive not connected")
             return False
         
         if self.speed_limit < speed:
@@ -255,6 +336,7 @@ class ODriveInterfaceAPI(object):
         
     def set_accel(self, accel):
         if not self.driver:
+            print("Odrive not connected")
             return False
         
         if self.accel_limit < accel:
