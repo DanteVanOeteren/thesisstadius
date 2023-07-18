@@ -7,34 +7,29 @@ server_socket = None
 ADDRESS = "192.168.74.242"
 PORT = 2468
 
-
-import sounddevice as sd
+"""Play a sine signal."""
+import time
 import numpy as np
-import soundfile as sf
+import sounddevice as sd
 
+device = None
+frequency = 2000
+amplitude = 0.5
+start_idx = 0
+samplerate = sd.query_devices(device, 'output')['default_samplerate']
+sd.default.latency = 'low'
 
-# AUDIO SETUP
-#Setting up the audio input output channels
-    
-# see all the available audio devices
-snd_dev = sd.query_devices()
-#set corrresponding input and output devices
-sd.default.device =18
-print(snd_dev)
-print(sd.default.device)
+def callback(outdata, frames, time, status):
+    if status:
+        print(status, file=sys.stderr)
+    global start_idx
+    t = (start_idx + np.arange(frames)) / samplerate
+    t = t.reshape(-1, 1)
+    outdata[:] = amplitude * np.sin(2 * np.pi * frequency * t)
+    start_idx += frames
 
-sd.default.samplerate = 44100
-fs = sd.default.samplerate = 44100
-dt = 1/fs
-T = 2
-N = T*fs
-taudio = np.arange(0,T,dt)
-ww = np.hanning(N)
-fo = 4000
-# yout = np.cos(2*np.pi*fo*taudio)
-
-fmix = [3000]
-yout = np.cos(2*np.pi*fmix[0]*taudio)
+test = sd.OutputStream(device=device, channels=1, callback=callback,
+                     samplerate=samplerate)
 
 def main():
     global server_socket
@@ -55,30 +50,38 @@ def main():
         sys.exit(-1)
 
     try:
+        print("\nReady to receive requests on port " + str(PORT) + " ...")
         while True:
-            print("\nReady to receive requests on port " + str(PORT) + " ...")
             data, addr = server_socket.recvfrom(4096)
             data = data.decode("utf8")
-            print("Request from " + addr[0])
+            
             if("sync" == data):
+                print("Syncing time with " + addr[0] + " ...")
                 server_socket.sendto("ready".encode('utf8'), addr)
                 num_of_times, addr = server_socket.recvfrom(4096)
                 num_of_times = int(num_of_times)
                 server_socket.sendto("ready".encode('utf8'), addr)
                 for i in range(int(num_of_times)):
                     sync_clock()
-                """
-                print(get_time())
-                t1 = time.perf_counter_ns()
-                while((time.perf_counter_ns() - t1)/1_000_000 < 500):
-                    continue
-                print("Synced time: ", get_time())
-                print("Done!")
-                """
-                time.sleep(0.2)
-                print("Synced time: ", get_time())
+            
+            elif("stream" == data):
+                test = sd.OutputStream(device=device, channels=1, callback=callback,
+                                     samplerate=samplerate)
+
             elif("audio" == data):
-                play = sd.play(0.5*yout, fs, blocking=True)
+                data, addr = server_socket.recvfrom(4096)
+                data = data.decode("utf8")
+                data = float(data)
+                time_to_wait =  data - time.time()
+                accurate_delay(time_to_wait)
+                synced_time = time.time()
+                with test:
+                    time.sleep(1)
+                    
+                print("Synced time: ",synced_time)
+                print("Stream latency: ", test.latency)
+                print("Done!")
+                print("")
                 #print("Play audio here")
             else:
                 server_socket.sendto(
@@ -88,6 +91,12 @@ def main():
         server_socket.close()
         sys.exit(-1)
 
+def accurate_delay(delay):
+    ''' Function to provide accurate time delay in seconds
+    '''
+    _ = (time.perf_counter() + delay)
+    while time.perf_counter() < _:
+        pass
 
 def sync_clock():
     addr = sync_packet()
