@@ -4,7 +4,7 @@ from datetime import datetime
 import time
 
 server_socket = None
-ADDRESS = "192.168.74.242"
+ADDRESS = "192.168.61.242"
 PORT = 2468
 
 """Play a sine signal."""
@@ -13,11 +13,11 @@ import numpy as np
 import sounddevice as sd
 
 device = None
-frequency = 2000
+frequency = 14000
 amplitude = 0.5
 start_idx = 0
 samplerate = sd.query_devices(device, 'output')['default_samplerate']
-sd.default.latency = 'low'
+sd.default.latency = 'high'
 
 def callback(outdata, frames, time, status):
     if status:

@@ -129,8 +129,8 @@ class ODriveInterfaceAPI(object):
             print("Disarm reason: ", self.axis.disarm_reason, ODriveError(self.axis.disarm_reason))
             return False
         
-        if self.axis.procedure_result == PROCEDURE_RESULT_NOT_CALIBRATED:
-            print("Unsuccesful calbration, check config")
+        if self.axis.procedure_result != PROCEDURE_RESULT_SUCCESS:
+            print("Unsuccesful procedure: ", ProcedureResult(self.axis.procedure_result))
             return False
         
         self.calibrated = True
@@ -160,6 +160,17 @@ class ODriveInterfaceAPI(object):
     
         #self.logger.debug("Setting drive mode.")
         self.axis.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+        
+        if self.axis.active_errors != 0:
+            print("Error handling")
+            print("Active errors: ", self.axis.active_errors-1, ODriveError(self.axis.active_errors-1))
+            print("Disarm reason: ", self.axis.disarm_reason, ODriveError(self.axis.disarm_reason))
+            return False
+        
+        if self.axis.procedure_result != PROCEDURE_RESULT_SUCCESS:
+            print("Unsuccesful procedure: ", ProcedureResult(self.axis.procedure_result))
+            return False
+        
         
         #self.engaged = True
         return True
@@ -218,7 +229,7 @@ class ODriveInterfaceAPI(object):
             return False
         
         if not (self.traj_start):
-            print("Start of trajectory not yet set)
+            print("Start of trajectory not yet set")
             return False
         
         if not ( ((self.traj_start <= target_pos) & (target_pos <= self.traj_end)) | ((self.traj_start >= target_pos) & (target_pos >= self.traj_end)) ):  
@@ -348,6 +359,7 @@ class ODriveInterfaceAPI(object):
         return True
         
         
-           
+    def play_music(self, filename):
+        
            
            

@@ -4,7 +4,6 @@ from datetime import datetime
 import time
 
 server_socket = None
-ADDRESS = "192.168.74.242"
 PORT = 2468
 NUM_OF_TIMES = 100
 
@@ -19,14 +18,22 @@ import numpy as np
 import sounddevice as sd
 import time
 
-device = 2
-frequency = 3000
+frequency = 500
 amplitude = 0.5
 start_idx = 0
+
+devices = sd.query_devices()
+device_idx = None
+device = None
+for idx, snd_dev in enumerate(devices):
+    if 'Digiface' in snd_dev['name']:
+        device_idx = idx
+        device = snd_dev
+
+sd.default.device = device_idx
+samplerate = device['default_samplerate']
 sd.default.latency = 'low'
-sd.default.device = device
-outputChannelMap = [1,2]
-samplerate = sd.query_devices(device, 'output')['default_samplerate']
+out_mapping = [0, 12]
 
 def callback(outdata, frames, time, status):
     if status:
@@ -34,10 +41,11 @@ def callback(outdata, frames, time, status):
     global start_idx
     t = (start_idx + np.arange(frames)) / samplerate
     t = t.reshape(-1, 1)
-    outdata[:] = amplitude * np.sin(2 * np.pi * frequency * t)
+    outdata[:] = 0
+    outdata[:, output_mapping] = amplitude * np.sin(2 * np.pi * frequency * t)
     start_idx += frames
 
-test = sd.OutputStream(device=device, channels=2, callback=callback,
+test = sd.OutputStream(device=device_idx, channels=32, callback=callback,
                      samplerate=samplerate)
 
 def main():
