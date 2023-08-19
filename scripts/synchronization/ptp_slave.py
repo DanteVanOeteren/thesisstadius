@@ -13,7 +13,7 @@ import numpy as np
 import sounddevice as sd
 
 device = None
-frequency = 14000
+frequency = 5000
 amplitude = 0.5
 start_idx = 0
 samplerate = sd.query_devices(device, 'output')['default_samplerate']
