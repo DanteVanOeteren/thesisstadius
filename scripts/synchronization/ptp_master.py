@@ -13,8 +13,8 @@ class PTP_Master(object):
     server_socket = None
     connected = False
     PORT = 2468
-    SLAVE_ADDRESS = "192.168.0.125"
-    NUM_OF_TIMES = 200
+    SLAVE_ADDRESS = "192.168.42.227"
+    NUM_OF_TIMES = 20
 
     OFFSETS = []
     DELAYS = []
@@ -98,7 +98,9 @@ class PTP_Master(object):
                 delay_final = sum(self.DELAYS) / len(self.DELAYS)
                 print('Final offset: ', offset_final)
                 print('Final delay: ', delay_final)
-        
+                
+                self.send("start_recording")
+                self.accurate_delay(1)
                 self.send('synced_execute')
     
                 delay = 1 # both computers agree to start at time.time() + delay based on this computer's clock
@@ -123,6 +125,7 @@ class PTP_Master(object):
         
         except Exception as e:
             print("Error syncing times")
+            print(e)
             return False
                 
     def accurate_delay(self, delay):

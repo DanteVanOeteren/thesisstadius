@@ -1,6 +1,7 @@
 import sys
 import time
 import logging
+import time
 
 import odrive
 from odrive.enums import *
@@ -8,6 +9,7 @@ from ruckig import InputParameter, OutputParameter, Result, Ruckig
 import matplotlib.pyplot as plt 
 from copy import copy
 
+from synchronization import ptp_master
 
 class ODriveFailure(Exception):
     pass
@@ -31,6 +33,8 @@ class ODriveInterfaceAPI(object):
     speed_limit = 20
     accel_limit = 40
     
+    ptp_master = None
+    
     def __init__(self, active_odrive = None):
         if active_odrive:
             self.driver = active_odrive
@@ -38,13 +42,14 @@ class ODriveInterfaceAPI(object):
             self.encoder_cpr = self.driver.axis.encoder.config.cpr
             self.connected = True
             #self.calibrated = ...
+        self.ptp_master = ptp_master.PTP_Master()
             
             
     def __del__(self):
-        self.disconnect()
+        self.disconnect_odrive()
         
         
-    def connect(self, port = None, timeout = 5):
+    def connect_odrive(self, port = None, timeout = 5):
         if self.driver:
             print("already connected")
         try: 
@@ -64,7 +69,7 @@ class ODriveInterfaceAPI(object):
         return True
     
     
-    def disconnect(self):
+    def disconnect_odrive(self):
         self.connected = False
         self.axis = None
         
@@ -243,11 +248,11 @@ class ODriveInterfaceAPI(object):
             accel = self.accel
         
         if speed < self.speed_limit:
-            print("Entered speed higher than speed limit of ", speed_limit, " rotations/s")
+            print("Entered speed higher than speed limit of ", self.speed_limit, " rotations/s")
             self.axis.trap_traj.config.vel_limit = speed
          
         if accel < self.accel_limit:
-            print("Entered acceleration higher than speed limit of ", speed_limit, " rotations/s^2")
+            print("Entered acceleration higher than speed limit of ", self.speed_limit, " rotations/s^2")
             self.axis.trap_traj.config.accel_limit = accel
             self.axis.trap_traj.config.decel_limit = accel
             
@@ -359,7 +364,10 @@ class ODriveInterfaceAPI(object):
         return True
         
         
-    def play_music(self, filename):
+    def synchronous_start(self):
+        if (self.ptp_master.sync_clock()):
+            time.sleep(3)
+            self.go_to_end()
         
            
            
